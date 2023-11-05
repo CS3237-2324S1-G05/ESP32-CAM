@@ -4,9 +4,19 @@
 #include <HTTPClient.h>
 #define CAMERA_MODEL_AI_THINKER 
 #include "camera_pins.h"
+#include <Arduino.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <esp_camera.h>
+#include <HTTPClient.h>
+
+
 
 const char* ssid = "3237GRP5";//redian//Linksys14312//3237GRP5
 const char* password = "3237password";//venuspassword//genm56sadf//3237password
+const char* host = "192.168.43.186"; // Replace with your server IP
+const int port = 7000; // Replace with your server port
 
 void startCameraServer();
 void setupLedFlash(int pin);
@@ -128,40 +138,78 @@ Serial.print("Saturation: "); Serial.println(s->status.saturation);
 }
 
 void captureAndSendImage() {
-  Serial.println("Capturing image...");
-  camera_fb_t * fb = esp_camera_fb_get(); // Capture image
+  Serial.println("Function captureAndSendImage called...");
+
+  camera_fb_t * fb = esp_camera_fb_get();
   if (!fb) {
     Serial.println("Camera capture failed");
     return;
   }
-  
-  HTTPClient http;
-  http.begin("https://192.168.43.186:1883/backend/human-recognition"); // Replace with your Flask server IP & port
-  http.addHeader("Content-Type", "image/jpeg");
-  
-  Serial.println("Sending image to server...");
-  int httpResponseCode = http.POST(fb->buf, fb->len); // Send image buffer as POST request
-  
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    Serial.println(httpResponseCode);
-    Serial.println(response);
-  } else {
-    Serial.println("Error on sending POST: " + String(httpResponseCode));
+  Serial.println("Image captured");
+
+  WiFiClient client;
+  if (!client.connect(host, port)) {
+    Serial.println("Connection to server failed");
+    return;
+  }
+  Serial.println("Connected to server");
+
+  String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+  String head = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"image.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
+  String tail = "\r\n--" + boundary + "--\r\n";
+
+  client.println("POST /backend/human-recognition HTTP/1.1");
+  client.println("Host: " + String(host) + ":" + String(port));
+  client.println("Content-Length: " + String(fb->len + head.length() + tail.length()));
+  client.println("Content-Type: multipart/form-data; boundary=" + boundary);
+  client.println();
+  client.print(head);
+
+  uint8_t *fbBuf = fb->buf;
+  size_t fbLen = fb->len;
+  for (size_t n = 0; n < fbLen; n = n + 1024) {
+    if (n + 1024 < fbLen) {
+      client.write(fbBuf, 1024);
+      fbBuf += 1024;
+    } else if (fbLen % 1024 > 0) {
+      size_t remainder = fbLen % 1024;
+      client.write(fbBuf, remainder);
+    }
+  }
+
+  client.print(tail);
+
+  int timeout = 10000; // 10 seconds timeout for reading the data
+  long int startTime = millis();
+
+  while (client.connected() && millis() - startTime < timeout) {
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+      Serial.println("Headers received");
+      break;
+    }
+  }
+  String line = client.readStringUntil('\n');
+  if (line.startsWith("HTTP/1.1")) {
+    Serial.println(line);
   }
   
-  http.end();
-  esp_camera_fb_return(fb); // Return the frame buffer back to the driver for reuse
+  // Close the connection
+  client.stop();
+  Serial.println("Connection closed");
+
+  esp_camera_fb_return(fb);
+  Serial.println("Frame buffer returned for reuse...");
 }
 
 void loop() {
   static unsigned long lastTime = 0; // will store last time an image was sent
   unsigned long currentTime = millis();
 
-  // Check if 2 seconds have passed
-  if (currentTime - lastTime >= 5000) { // 5000ms (5 seconds) has passed
+  // Check if 10 seconds have passed
+  if (currentTime - lastTime >= 10000) { // 10000ms (10 seconds) has passed
     lastTime = currentTime; // save the last time an image was sent
-    Serial.println("Five seconds passed, sending image...");
+    Serial.println("Ten seconds passed, sending image...");
     captureAndSendImage(); // capture and send the image
   }
     delay(10);
