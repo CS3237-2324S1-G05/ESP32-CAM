@@ -5,15 +5,15 @@
 #define CAMERA_MODEL_AI_THINKER 
 #include "camera_pins.h"
 
-const char* ssid = "Linksys14312";//redian//Linksys14312
-const char* password = "genm56sadf";//venuspassword//genm56sadf
+const char* ssid = "3237GRP5";//redian//Linksys14312
+const char* password = "3237password";//venuspassword//genm56sadf
 /// MQTT Broker settings
-const char* mqtt_broker = "localhost";  // IP of the MQTT broker (the machine running the Python script)
+const char* mqtt_broker = "192.168.43.156";  // IP of the MQTT broker (the machine running the Python script)
 // MQTT Topic
 const char* mqtt_topic = "camera/take_photo";  // This should match the topic in the Python script
  // Topic name must match with what the Python script expects
-const char* mqtt_username = "zehou"; // if your MQTT broker has a username, replace this
-const char* mqtt_password = "zehou"; // if your MQTT broker has a password, replace this
+const char* mqtt_username = ""; // if your MQTT broker has a username, replace this
+const char* mqtt_password = ""; // if your MQTT broker has a password, replace this
 const char* clientID = "ESP32_Camera_Client";
 
 WiFiClient espClient;
@@ -27,7 +27,7 @@ void reconnect();
 void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(true);
-  Serial.println();
+  Serial.println("START OF SETUP");
 
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -54,8 +54,9 @@ void setup() {
   //config.pixel_format = PIXFORMAT_RGB565; // for face detection/recognition
   config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   config.fb_location = CAMERA_FB_IN_PSRAM;
-  config.jpeg_quality = 12;
+  config.jpeg_quality = 4;
   config.fb_count = 1;
+  Serial.println("CONFIG DONE");
   
   // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
   //                      for larger pre-allocated frame buffer.
@@ -76,11 +77,6 @@ void setup() {
     config.fb_count = 2;
 #endif
   }
-
-#if defined(CAMERA_MODEL_ESP_EYE)
-  pinMode(13, INPUT_PULLUP);
-  pinMode(14, INPUT_PULLUP);
-#endif
 
   // camera init
   esp_err_t err = esp_camera_init(&config);
@@ -114,6 +110,7 @@ void setup() {
 #if defined(LED_GPIO_NUM)
   setupLedFlash(LED_GPIO_NUM);
 #endif
+Serial.println("SETTING UP WIFI");
 
   WiFi.begin(ssid, password);
   WiFi.setSleep(false);
@@ -128,6 +125,7 @@ void setup() {
   client.setCallback(callback);
 
   startCameraServer();
+  Serial.println("STARTED CAMERA SERVER");
 
   Serial.print("Camera Ready! Use 'http://");
   Serial.print(WiFi.localIP());
@@ -188,7 +186,7 @@ void takePhoto() {
 
     // Send the image to the server
     HTTPClient http;
-    http.begin("http://192.168.10.131:5000/upload");
+    http.begin("http://192.168.43.156:3237/backend/carplate-recognition/entrance");
     http.addHeader("Content-Type", "image/jpeg");
     
     int httpResponseCode = http.POST(fb->buf, fb->len);
